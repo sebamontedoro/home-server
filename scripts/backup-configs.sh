@@ -95,6 +95,7 @@ tar czf "$DEST/host-etc.tar.gz" -C / \
   etc/msmtprc etc/aliases etc/smartd.conf \
   etc/docker/daemon.json etc/cron.d \
   etc/systemd/logind.conf \
+  etc/ssh/sshd_config.d etc/ufw \
   2>>"$LOG" || log "  AVISO: host-etc con advertencias (archivos faltantes?)"
 
 # --- 4) Verificar integridad del tar ---

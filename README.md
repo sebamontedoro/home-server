@@ -164,7 +164,29 @@ docker compose ps         # verificar que quede todo "running"/"healthy"
 docker compose logs -f    # seguir logs si algo falla
 ```
 
-### 7. Reconfigurar las apps (lo que no está en el repo)
+### 7. Configurar el host (cron, monitoreo, firewall, SSH)
+
+Todo lo que vive fuera del compose se instala con un solo script (idempotente):
+
+```bash
+sudo bash scripts/setup-host.sh
+```
+
+Cubre: rotación de logs de Docker + live-restore, crons de backup (03:00) y
+actualización (04:00), monitoreo SMART de discos, SSH endurecido y firewall
+ufw. Dos cosas a revisar en un equipo distinto:
+
+- **Nombres de disco** en `/etc/smartd.conf` (`/dev/nvme0n1`, `/dev/sda`):
+  verificar con `lsblk` y ajustar.
+- **`/etc/msmtprc`** (envío de alertas por Gmail) tiene un secreto y no lo
+  genera el script: restaurarlo de `host-etc.tar.gz` del backup, o recrearlo
+  (ver sección Monitoreo).
+
+El script **no apaga** el acceso SSH por contraseña hasta que exista una clave
+en `~/.ssh/authorized_keys` (instalarla con `ssh-copy-id server@<ip>` desde tu
+PC y volver a correrlo).
+
+### 8. Reconfigurar las apps (lo que no está en el repo)
 
 Como el estado de runtime no se versiona, hay que reconfigurar cada app desde su
 UI (una sola vez):
@@ -181,7 +203,7 @@ UI (una sola vez):
 - **Pi-hole** (`:8081`): password del panel = `PIHOLE_WEBPASSWORD` del `.env`.
   Reactivar como DNS de la LAN si corresponde.
 
-### 8. HTTPS local `*.lan` (opcional pero recomendado)
+### 9. HTTPS local `*.lan` (opcional pero recomendado)
 
 Para entrar por `https://jellyfin.lan` etc.:
 
@@ -231,7 +253,7 @@ noches a las 03:00 en `/mnt/hdd/backups/<fecha>/` (retención: 7 días), vía
   `daemon.json` de Docker. En un host nuevo se restaura con
   `tar xzf host-etc.tar.gz -C /` + `apt install smartmontools msmtp-mta bsd-mailx`.
 
-En un **host nuevo**, esto convierte el paso 7 (reconfigurar apps a mano) en una
+En un **host nuevo**, esto convierte el paso 8 (reconfigurar apps a mano) en una
 restauración directa:
 
 ```bash
@@ -244,11 +266,61 @@ zcat /mnt/hdd/backups/<fecha>/romm-db.sql.gz | \
 docker compose restart romm
 ```
 
-La instalación inicial del cron + rotación de logs de Docker se hace una vez
-con `sudo bash scripts/setup-host.sh`.
-
 > El backup vive en el mismo equipo (otro disco). Para cubrir robo/incendio o
 > falla doble, falta una copia externa (disco USB o remota) — pendiente.
+
+---
+
+## Monitoreo y alertas
+
+`smartd` vigila la salud de los discos y avisa **por email** ante cualquier
+degradación (sectores pendientes, atributos prefail, tests fallidos):
+
+- **HDD de media**: test corto diario 02:00 + test largo (superficie completa)
+  sábados 04:00.
+- **NVMe**: test corto domingos 02:00.
+
+Los mails salen por Gmail vía `msmtp`: smartd escribe a `root`, el alias
+(`/etc/aliases`) lo manda a la casilla real, y `/etc/msmtprc` tiene la cuenta
+de envío con una [contraseña de aplicación](https://myaccount.google.com/apppasswords)
+de Google. Ese archivo no está en el repo (secreto); en un host nuevo se
+restaura del backup o se recrea con esta forma (permisos `600`, dueño root):
+
+```
+defaults
+auth on
+tls  on
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+logfile /var/log/msmtp.log
+aliases /etc/aliases
+
+account gmail
+host smtp.gmail.com
+port 587
+from <cuenta-de-envio>@gmail.com
+user <cuenta-de-envio>@gmail.com
+password <app-password-de-16-letras>
+
+account default : gmail
+```
+
+Probar el canal: `echo "test" | sudo mail -s "[home-server] test" root` y
+revisar `/var/log/msmtp.log`. Cualquier script del server puede alertar igual.
+
+---
+
+## Seguridad
+
+- **Secretos** en `.env` (fuera de git); ver nota al final.
+- **SSH solo con clave pública**: password y root deshabilitados
+  (`/etc/ssh/sshd_config.d/10-hardening.conf`). Acceso de emergencia: consola
+  física o Tailscale. Para autorizar otro dispositivo: agregar su clave a
+  `~/.ssh/authorized_keys`.
+- **Firewall ufw** (persistente): deny entrante por defecto; permiten entrada
+  la LAN (`192.168.1.0/24`), Tailscale (`tailscale0`) y los bridges de Docker
+  (`172.16.0.0/12`). **Ojo**: esa última regla no es opcional — Caddy corre en
+  bridge y hace proxy hacia Jellyfin/Pi-hole que están en `network_mode: host`;
+  sin ella esos routes devuelven 502.
 
 ---
 

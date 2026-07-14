@@ -39,7 +39,13 @@ The stack is the classic *arr media-automation pipeline plus standalone media se
 
 - `scripts/daily-update.sh` — daily apt + `compose pull` + `up -d` via root cron at 04:00 (log: `/var/log/daily-update.log`).
 - `scripts/backup-configs.sh` — nightly backup of runtime state (config dirs + `.env` + RomM DB dump) to `/mnt/hdd/backups/<date>/`, 7-day retention, root cron at 03:00 (log: `/var/log/backup-configs.log`). Briefly stops SQLite-holding services during the tar; always restarts them (EXIT trap).
-- `scripts/setup-host.sh` — one-time root setup: Docker log rotation + live-restore in `/etc/docker/daemon.json`, backup cron install.
+- `scripts/setup-host.sh` — idempotent root setup of everything living outside compose: Docker log rotation + live-restore, both crons, smartd disk monitoring, SSH hardening (won't disable password auth unless `authorized_keys` exists), ufw firewall. Only `/etc/msmtprc` (Gmail app password for alerts) must be restored from backup or by hand.
+
+### Host security & monitoring
+
+- SSH is **key-only** (`/etc/ssh/sshd_config.d/10-hardening.conf`); root login and password auth disabled. Emergency access: physical console or Tailscale.
+- **ufw is active**: default deny incoming; allowed sources are the LAN (`192.168.1.0/24`), `tailscale0`, and Docker bridges (`172.16.0.0/12`). The Docker-bridge rule is load-bearing: Caddy (bridge network) proxies to Jellyfin/Pi-hole which run on `network_mode: host` — removing it breaks those routes with 502s.
+- `smartd` monitors both disks and emails alerts via msmtp/Gmail (`root` → real mailbox via `/etc/aliases`). The media HDD had a baseline of 16 pending sectors on 2026-07-14 — growth of that number means the disk is dying.
 
 ### Storage convention
 
