@@ -33,7 +33,13 @@ The stack is the classic *arr media-automation pipeline plus standalone media se
 
 - **Acquisition pipeline**: `prowlarr` (indexer manager) feeds `radarr` (movies) and `sonarr` (TV), which send downloads to `qbittorrent`. These services are wired together at runtime through each app's web UI (API keys, download-client config) — that state lives in the bind-mounted `./<service>/config` dirs, **not** in this repo.
 - **Media servers** read the finished library: `jellyfin` (video, with hardware transcoding), `navidrome` (music, read-only mount), `kavita` (ebooks/comics), `romm` + `romm-db` (retro games, backed by MariaDB).
-- **Infrastructure**: `portainer` (Docker UI, mounts the Docker socket read-only), `pihole` (LAN DNS + ad blocking).
+- **Infrastructure**: `portainer` (Docker UI, mounts the Docker socket read-only), `pihole` (LAN DNS + ad blocking), `caddy` (reverse proxy, HTTPS `*.lan`), `cups` (AirPrint/printer sharing, host network), `frigate` (camera NVR), `poketracker` (self-built app).
+
+### Maintenance automation
+
+- `scripts/daily-update.sh` — daily apt + `compose pull` + `up -d` via root cron at 04:00 (log: `/var/log/daily-update.log`).
+- `scripts/backup-configs.sh` — nightly backup of runtime state (config dirs + `.env` + RomM DB dump) to `/mnt/hdd/backups/<date>/`, 7-day retention, root cron at 03:00 (log: `/var/log/backup-configs.log`). Briefly stops SQLite-holding services during the tar; always restarts them (EXIT trap).
+- `scripts/setup-host.sh` — one-time root setup: Docker log rotation + live-restore in `/etc/docker/daemon.json`, backup cron install.
 
 ### Storage convention
 

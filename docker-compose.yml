@@ -274,6 +274,27 @@ services:
       - ./caddy/config:/config
     restart: unless-stopped
 
+  # --- IMPRESION: CUPS + AIRPRINT ---
+  # Comparte la impresora USB/red de la casa via AirPrint (iPhone/iPad) y IPP.
+  # Red host: necesaria para que mDNS/Bonjour anuncie la impresora en la LAN.
+  # Panel web en el puerto 631. La config de impresoras vive en ./cups/config.
+  cups:
+    image: drpsychick/airprint-bridge
+    container_name: cups
+    network_mode: host
+    environment:
+      - TZ=America/Argentina/Cordoba
+      - CUPS_REMOTE_ADMIN=yes
+      - CUPS_ENCRYPT=Never
+      - CUPS_SHARE_PRINTERS=yes
+      - CUPS_WEBINTERFACE=yes
+      - CUPS_ADMIN_USER=server
+      - CUPS_ADMIN_PASSWORD=${CUPS_ADMIN_PASSWORD}
+    volumes:
+      - ./cups/config:/etc/cups
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+    restart: unless-stopped
+
   # --- DNS LOCAL Y BLOQUEADOR DE PUBLICIDAD: PI-HOLE ---
   pihole:
     image: pihole/pihole:latest

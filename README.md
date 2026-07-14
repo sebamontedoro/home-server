@@ -32,6 +32,7 @@ Pipeline clásico de automatización *arr + servidores de media + infraestructur
 | portainer     | Panel de Docker                            | 9000   | `portainer.lan`     |
 | pihole        | DNS de la LAN + bloqueo de publicidad      | 8081   | `pihole.lan`        |
 | caddy         | Reverse proxy (HTTPS `*.lan`)              | 80/443 | —                   |
+| cups          | Impresión compartida + AirPrint            | 631    | —                   |
 
 ### Convención de almacenamiento
 
@@ -213,6 +214,37 @@ docker compose pull && docker compose up -d
 
 `scripts/daily-update.sh` automatiza la actualización del host (apt) y del stack
 (pull + up + prune); pensado para correr por cron como root.
+
+---
+
+## Backups
+
+El estado de runtime (lo que **no** está en este repo) se respalda todas las
+noches a las 03:00 en `/mnt/hdd/backups/<fecha>/` (retención: 7 días), vía
+`scripts/backup-configs.sh` desde cron:
+
+- `configs.tar.gz` — dirs de config de todos los servicios + `.env`. Los
+  servicios con SQLite se detienen ~1 min durante la copia (copia en frío).
+- `romm-db.sql.gz` — dump de la MariaDB de RomM (en caliente).
+
+En un **host nuevo**, esto convierte el paso 7 (reconfigurar apps a mano) en una
+restauración directa:
+
+```bash
+# con el stack detenido (docker compose down), desde el dir del compose:
+tar xzf /mnt/hdd/backups/<fecha>/configs.tar.gz
+docker compose up -d
+# restaurar la base de RomM:
+zcat /mnt/hdd/backups/<fecha>/romm-db.sql.gz | \
+  docker compose exec -T romm-db mariadb -uroot -p"$ROMM_DB_ROOT_PASSWORD"
+docker compose restart romm
+```
+
+La instalación inicial del cron + rotación de logs de Docker se hace una vez
+con `sudo bash scripts/setup-host.sh`.
+
+> El backup vive en el mismo equipo (otro disco). Para cubrir robo/incendio o
+> falla doble, falta una copia externa (disco USB o remota) — pendiente.
 
 ---
 
