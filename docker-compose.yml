@@ -1,0 +1,299 @@
+services:
+  # --- GESTOR DE DESCARGAS ---
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Cordoba
+      - WEBUI_PORT=8080
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    volumes:
+      - ./qbittorrent/config:/config
+      - /mnt/hdd:/data
+    ports:
+      - 8080:8080
+      - 6881:6881
+      - 6881:6881/udp
+    restart: unless-stopped
+
+  # --- GESTOR DE INDIZADORES (BUSCADORES) ---
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Cordoba
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    volumes:
+      - ./prowlarr/config:/config
+    ports:
+      - 9696:9696
+    restart: unless-stopped
+
+  # --- GESTOR DE PELICULAS ---
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Cordoba
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    volumes:
+      - ./radarr/config:/config
+      - /mnt/hdd:/data
+    ports:
+      - 7878:7878
+    restart: unless-stopped
+
+  # --- GESTOR DE SERIES ---
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Cordoba
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    volumes:
+      - ./sonarr/config:/config
+      - /mnt/hdd:/data
+    ports:
+      - 8989:8989
+    restart: unless-stopped
+
+  # -- Jellyfin --
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    user: "1000:1000"
+    group_add:
+      - "992"  # render
+      - "44"   # video
+    network_mode: 'host'
+    environment:
+      - TZ=America/Argentina/Cordoba
+      - LIBVA_DRIVER_NAME=iHD
+      - JELLYFIN_FFMPEG=/usr/lib/jellyfin-ffmpeg/ffmpeg
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    volumes:
+      - ./jellyfin/config:/config
+      - ./jellyfin/cache:/cache
+      - /mnt/hdd:/data
+    devices:
+      - /dev/dri:/dev/dri
+    restart: unless-stopped
+
+  # --- VIGILANCIA / NVR: FRIGATE ---
+  # Grabador de las camaras de seguridad con deteccion de objetos por IA.
+  # Detecta con la GPU Intel (OpenVINO) y decodifica H.265 por VAAPI, igual que
+  # Jellyfin (por eso el group_add render/video y /dev/dri). Config en
+  # ./frigate/config/config.yml; graba en /mnt/hdd/frigate. UI en el puerto 5000.
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:stable
+    container_name: frigate
+    group_add:
+      - "992"  # render (acceso a /dev/dri)
+      - "44"   # video
+    shm_size: "256mb"
+    environment:
+      - TZ=America/Argentina/Cordoba
+      - LIBVA_DRIVER_NAME=iHD
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./frigate/config:/config
+      - /mnt/hdd/frigate:/media/frigate
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs:
+          size: 1000000000  # 1GB para segmentos de grabacion en curso
+    ports:
+      - 5000:5000        # UI web
+      - 8554:8554        # RTSP restream
+      - 8555:8555/tcp    # WebRTC (video en vivo)
+      - 8555:8555/udp
+    restart: unless-stopped
+
+  # -- Portainer - Panel de control visual para Docker
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./portainer/data:/data
+    ports:
+      - 9000:9000
+    restart: always
+
+  # --- JUEGOS RETRO: ROMM ---
+  romm:
+    image: rommapp/romm:latest
+    container_name: romm
+    user: "1000:1000"
+    environment:
+      - DB_HOST=romm-db
+      - DB_PORT=3306
+      - DB_NAME=romm
+      - DB_USER=romm-user
+      - DB_PASSWD=${ROMM_DB_PASSWORD}
+      - ROMM_AUTH_SECRET_KEY=${ROMM_AUTH_SECRET_KEY}
+      - ROMM_AUTH_USERNAME=${ROMM_AUTH_USERNAME}
+      - ROMM_AUTH_PASSWORD=${ROMM_AUTH_PASSWORD}
+      - IGDB_CLIENT_ID=${IGDB_CLIENT_ID}
+      - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET}
+      - HASHEOUS_API_ENABLED=true
+      - STEAMGRIDDB_API_KEY=${STEAMGRIDDB_API_KEY}
+      - RETROACHIEVEMENTS_API_KEY=${RETROACHIEVEMENTS_API_KEY}
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    volumes:
+      - ./romm/resources:/romm/resources
+      - ./romm/config:/romm/config
+      - ./romm/assets:/romm/assets
+      - /mnt/hdd/media/games:/romm/library
+    ports:
+      - 8083:8080
+    depends_on:
+      romm-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  romm-db:
+    image: mariadb:11
+    container_name: romm-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=${ROMM_DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=romm
+      - MYSQL_USER=romm-user
+      - MYSQL_PASSWORD=${ROMM_DB_PASSWORD}
+    volumes:
+      - ./romm/database:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # --- GESTOR DE EBOOKS Y COMICS: KAVITA ---
+  kavita:
+    image: lscr.io/linuxserver/kavita:latest
+    container_name: kavita
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Argentina/Cordoba
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    volumes:
+      - ./kavita/config:/config
+      - /mnt/hdd/media/books:/books
+    ports:
+      - 8085:5000
+    restart: unless-stopped
+
+  # --- SERVIDOR DE MÚSICA: NAVIDROME ---
+  navidrome:
+    image: deluan/navidrome:latest
+    container_name: navidrome
+    user: "1000:1000"
+    environment:
+      - ND_SCANSCHEDULE=@every 30m
+      - ND_LOGLEVEL=info
+      - ND_SESSIONTIMEOUT=24h
+      - TZ=America/Argentina/Cordoba
+    volumes:
+      - ./navidrome/data:/data
+      - /mnt/hdd/media/music:/music:ro
+    ports:
+      - 4533:4533
+    restart: unless-stopped
+
+  # --- ASISTENTE POKÉMON: POKETRACKER ---
+  # App propia (React + API Node) para seguir partidas de Pokémon y recomendar
+  # qué Pokémon del equipo usar en cada combate. Imagen construida localmente.
+  poketracker:
+    build: ./poketracker
+    container_name: poketracker
+    user: "1000:1000"
+    environment:
+      - TZ=America/Argentina/Cordoba
+      - PORT=8086
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    volumes:
+      - ./poketracker/data:/app/data
+    ports:
+      - 8086:8086
+    restart: unless-stopped
+
+  # --- REVERSE PROXY: CADDY ---
+  # Enruta nombres *.lan (resueltos por Pi-hole) al puerto interno de cada
+  # servicio, para entrar sin recordar puertos. Solo HTTP en la LAN de casa.
+  # Toma el 80/443 del host, por eso el panel de Pi-hole se movio al 8081.
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    environment:
+      - TZ=America/Argentina/Cordoba
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      # Directorio (no archivo suelto): sobrevive a ediciones que cambian el
+      # inode, asi 'caddy reload' siempre lee el Caddyfile actualizado.
+      - ./caddy/conf:/etc/caddy
+      - ./caddy/data:/data
+      - ./caddy/config:/config
+    restart: unless-stopped
+
+  # --- DNS LOCAL Y BLOQUEADOR DE PUBLICIDAD: PI-HOLE ---
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole
+    # Red host: imprescindible para que Pi-hole vea las MAC reales de los
+    # clientes de la LAN (en bridge solo los ve por IP) y poder agrupar por MAC,
+    # asi el bloqueo sigue a la PC aunque DHCP le cambie la IP.
+    network_mode: host
+    environment:
+      TZ: 'America/Argentina/Cordoba'
+      WEBPASSWORD: '${PIHOLE_WEBPASSWORD}'
+      FTLCONF_dns_listeningMode: 'ALL'
+      # Panel web movido del 80/443 al 8081/8443 para dejarle el 80/443 a Caddy.
+      FTLCONF_webserver_port: '8081o,8443os,[::]:8081o,[::]:8443os'
+      # Cargar los .conf de /etc/dnsmasq.d (ahi vive el comodin *.lan).
+      FTLCONF_misc_etc_dnsmasq_d: 'true'
+    volumes:
+      - ./pihole/etc-pihole:/etc/pihole
+      - ./pihole/etc-dnsmasq.d:/etc/dnsmasq.d
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
+

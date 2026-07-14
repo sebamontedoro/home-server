@@ -1,0 +1,85 @@
+# Caddyfile - Reverse proxy local de la casa.
+# Cada servicio queda accesible como https://<nombre>.lan (sin puerto).
+# Pi-hole resuelve *.lan -> 192.168.1.14 (este servidor), y Caddy enruta
+# segun el nombre hacia el puerto interno de cada contenedor.
+{
+	# HTTPS con la CA interna de Caddy (el dominio .lan no es publico, no hay
+	# Let's Encrypt). Caddy emite certificados firmados por su propia CA raiz.
+	# Para que el navegador confie hay que INSTALAR esa CA raiz en cada
+	# dispositivo. El certificado raiz esta en:
+	#   ./caddy/data/caddy/pki/authorities/local/root.crt
+	# Caddy tambien redirige HTTP (80) -> HTTPS (443) automaticamente.
+	local_certs
+}
+
+# --- SERVIDORES MULTIMEDIA ---
+# Jellyfin corre en network_mode host -> se llega por la IP del servidor.
+jellyfin.lan {
+	reverse_proxy 192.168.1.14:8096
+}
+
+music.lan {
+	reverse_proxy navidrome:4533
+}
+
+kavita.lan {
+	reverse_proxy kavita:5000
+}
+
+romm.lan {
+	reverse_proxy romm:8080
+}
+
+poke.lan {
+	reverse_proxy poketracker:8086
+}
+
+# --- AUTOMATIZACION (*arr) ---
+prowlarr.lan {
+	reverse_proxy prowlarr:9696
+}
+
+radarr.lan {
+	reverse_proxy radarr:7878
+}
+
+sonarr.lan {
+	reverse_proxy sonarr:8989
+}
+
+qbit.lan {
+	reverse_proxy qbittorrent:8080
+}
+
+# --- INFRAESTRUCTURA ---
+portainer.lan {
+	reverse_proxy portainer:9000
+}
+
+# Frigate: NVR/grabador de las camaras de seguridad. UI en el 5000.
+frigate.lan {
+	reverse_proxy frigate:5000
+}
+
+# Pi-hole corre en network_mode host; su panel se movio al 8081.
+# El panel vive en /admin, redirigimos la raiz para abrirlo directo.
+pihole.lan {
+	redir / /admin
+	reverse_proxy 192.168.1.14:8081
+}
+
+# --- DESCARGA DE LA CA RAIZ ---
+# Para que cada dispositivo confie en los https://*.lan hay que instalar esta
+# CA raiz. En vez de copiarla por USB/SSH, se sirve aca: entrar a http://ca.lan
+# y bajar root.crt. Va por HTTP PLANO a proposito (el bloque empieza con
+# http://): si fuera https, el navegador necesitaria confiar en el certificado
+# que justamente venis a instalar -> huevo y gallina. Por eso no redirige a 443.
+http://ca.lan {
+	root * /etc/caddy/ca
+	# Cualquier ruta sirve el .crt y se fuerza la DESCARGA (attachment): si no,
+	# el navegador muestra el PEM como texto en pantalla en vez de bajarlo.
+	rewrite * /root.crt
+	header Content-Disposition "attachment; filename=\"caddy-root-CA.crt\""
+	header Content-Type "application/x-x509-ca-cert"
+	file_server
+}

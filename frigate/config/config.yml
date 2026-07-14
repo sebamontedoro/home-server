@@ -1,0 +1,96 @@
+# Frigate - NVR con deteccion de objetos.
+# Camara 1 = Gadnic/XiongMai en 192.168.1.50 (RTSP, admin sin pass).
+# Detecta con la GPU Intel (OpenVINO) y decodifica H.265 por VAAPI.
+
+mqtt:
+  enabled: false
+
+# --- STREAMING (go2rtc): audio en vivo y two-way (hablar por la camara) ---
+# Toma el stream principal (con audio G.711). go2rtc detecta solo el canal de
+# audio de vuelta (backchannel ONVIF) para hablar por el parlante, si la cam
+# lo soporta. La vista Live de Frigate usa este stream (mismo nombre = camara1).
+go2rtc:
+  streams:
+    camara1:
+      - "rtsp://192.168.1.50:554/user=admin&password=&channel=1&stream=0.sdp?real_stream"
+
+# --- DETECTOR: GPU Intel via OpenVINO ---
+detectors:
+  ov:
+    type: openvino
+    device: GPU
+
+model:
+  width: 300
+  height: 300
+  input_tensor: nhwc
+  input_pixel_format: bgr
+  path: /openvino-model/ssdlite_mobilenet_v2.xml
+  labelmap_path: /openvino-model/coco_91cl_bkgr.txt
+
+# --- FFMPEG global ---
+ffmpeg:
+  # Decodificacion por hardware en la iGPU Intel.
+  hwaccel_args: preset-vaapi
+  output_args:
+    # La camara manda audio G.711 (pcm_alaw) que NO entra en MP4:
+    # se re-encodea a AAC para poder guardar la grabacion con sonido.
+    record: preset-record-generic-audio-aac
+
+# --- DETECCION ---
+detect:
+  enabled: true
+  fps: 5
+
+# Por ahora solo personas (lo mas util para vigilancia). Se puede sumar
+# car, dog, cat, etc. mas adelante.
+objects:
+  track:
+    - person
+
+# --- GRABACION: MOVIMIENTO + EVENTOS ---
+# continuous.days=0 -> nada de 24/7 puro (ahorra disco).
+# motion.days=10    -> graba continuo pero SOLO segmentos con movimiento
+#                      (auto, animal, persona, viento...), retenidos 10 dias.
+# alerts/detections -> los eventos de PERSONA se guardan 30 dias.
+# Frigate borra lo mas viejo solo; el uso de disco se estabiliza.
+record:
+  enabled: true
+  continuous:
+    days: 0
+  motion:
+    days: 10
+  alerts:
+    retain:
+      days: 30
+      mode: motion
+  detections:
+    retain:
+      days: 30
+      mode: motion
+
+# --- SNAPSHOTS (fotos de cada objeto detectado) ---
+snapshots:
+  enabled: true
+  retain:
+    default: 7
+
+# --- CAMARAS ---
+cameras:
+  camara1:
+    ffmpeg:
+      inputs:
+        # Sub-stream (800x448) para la deteccion: liviano para la CPU/GPU.
+        - path: 
+            rtsp://192.168.1.50:554/user=admin&password=&channel=1&stream=1.sdp?real_stream
+          roles:
+            - detect
+        # Stream principal (2304x1296, 3MP) para grabar en calidad completa.
+        - path: 
+            rtsp://192.168.1.50:554/user=admin&password=&channel=1&stream=0.sdp?real_stream
+          roles:
+            - record
+    detect:
+      width: 800
+      height: 448
+version: 0.17-0

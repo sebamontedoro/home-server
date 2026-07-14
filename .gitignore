@@ -1,0 +1,54 @@
+# ==========================================================================
+# .gitignore — repo de ESTRUCTURA del server (no de datos, ni media).
+#
+# Estrategia LISTA BLANCA: se ignora TODO por defecto y abajo se habilitan (!)
+# solo los archivos escritos a mano que definen la estructura. Asi ninguna
+# base de datos, cache, log ni secreto termina en GitHub por accidente.
+#
+# Todo lo NO listado aca (config/estado de qbittorrent, radarr, sonarr,
+# prowlarr, jellyfin, kavita, navidrome, portainer, romm, cups, etc.) se
+# regenera al levantar el stack y se reconfigura desde la UI de cada app.
+# ==========================================================================
+
+# 1) Ignorar todo lo del nivel raiz.
+/*
+
+# 2) Archivos raiz que SI se versionan.
+!.gitignore
+!.env.example
+!README.md
+!CLAUDE.md
+!docker-compose.yml
+
+# 3) Scripts de mantenimiento del host.
+!scripts/
+
+# 4) PokeTracker: app propia -> se versiona el CODIGO FUENTE (la imagen se
+#    reconstruye con `docker compose build`). Se excluyen dependencias,
+#    compilado y datos de runtime.
+!poketracker/
+poketracker/node_modules/
+poketracker/dist/
+poketracker/data/
+
+# 5) Caddy: solo el Caddyfile y la CA raiz PUBLICA (root.crt, para instalar
+#    en los dispositivos). La clave privada de la CA vive en caddy/data y NO
+#    se versiona.
+!caddy/
+caddy/data/
+caddy/config/
+caddy/conf/ca/*
+!caddy/conf/ca/root.crt
+
+# 6) Frigate: solo el config.yml. Bases SQLite, caches y secretos quedan afuera.
+!frigate/
+frigate/config/*
+!frigate/config/config.yml
+
+# 7) Pi-hole: solo el DNS local (comodin *.lan -> server). El resto de
+#    etc-pihole (gravity, listas de bloqueo, FTL.db) es estado y no se versiona.
+!pihole/
+pihole/etc-pihole/
+
+# 8) SEGURIDAD: el .env con los secretos reales NUNCA se versiona.
+.env
