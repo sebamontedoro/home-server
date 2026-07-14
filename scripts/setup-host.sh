@@ -19,9 +19,12 @@ set -euo pipefail
 COMPOSE_DIR="/home/server/docker-services"
 cd "$COMPOSE_DIR"
 
-echo "== 1/6: paquetes del host =="
+echo "== 1/6: paquetes del host y zona horaria =="
 apt-get update -qq
 apt-get install -y -qq smartmontools msmtp-mta bsd-mailx ufw >/dev/null
+# Hora local del host = la de los contenedores. Sin esto, cron y smartd
+# interpretan sus horarios en UTC (3 horas "antes" de lo esperado).
+timedatectl set-timezone America/Argentina/Cordoba
 echo "   OK"
 
 echo "== 2/6: /etc/docker/daemon.json (rotacion de logs + live-restore) =="
