@@ -226,6 +226,10 @@ noches a las 03:00 en `/mnt/hdd/backups/<fecha>/` (retención: 7 días), vía
 - `configs.tar.gz` — dirs de config de todos los servicios + `.env`. Los
   servicios con SQLite se detienen ~1 min durante la copia (copia en frío).
 - `romm-db.sql.gz` — dump de la MariaDB de RomM (en caliente).
+- `host-etc.tar.gz` — config del host fuera del compose: `smartd` (monitoreo
+  SMART de discos con alertas por mail), `msmtp` (envío por Gmail), crons y
+  `daemon.json` de Docker. En un host nuevo se restaura con
+  `tar xzf host-etc.tar.gz -C /` + `apt install smartmontools msmtp-mta bsd-mailx`.
 
 En un **host nuevo**, esto convierte el paso 7 (reconfigurar apps a mano) en una
 restauración directa:

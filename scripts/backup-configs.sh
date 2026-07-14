@@ -86,6 +86,17 @@ if [ "$TAR_RC" -ge 2 ]; then
   exit 1
 fi
 
+# --- 3b) Config del HOST fuera del compose (smartd, msmtp, cron, docker) ---
+# Cosas de /etc que setup-host.sh no regenera del todo (p.ej. msmtprc tiene
+# el app password de Gmail). Tar chico y separado.
+log "creando host-etc.tar.gz..."
+tar czf "$DEST/host-etc.tar.gz" -C / \
+  --ignore-failed-read \
+  etc/msmtprc etc/aliases etc/smartd.conf \
+  etc/docker/daemon.json etc/cron.d \
+  etc/systemd/logind.conf \
+  2>>"$LOG" || log "  AVISO: host-etc con advertencias (archivos faltantes?)"
+
 # --- 4) Verificar integridad del tar ---
 if tar tzf "$DEST/configs.tar.gz" >/dev/null 2>&1; then
   log "  tar OK ($(du -h "$DEST/configs.tar.gz" | cut -f1))"
