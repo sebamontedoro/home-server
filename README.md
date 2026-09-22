@@ -1,4 +1,4 @@
-# home-server
+# Home server autoalojado y reproducible
 
 Stack de servidor casero autoalojado, definido por completo en un solo
 `docker-compose.yml`. Este repo guarda **la estructura** del server (el compose,
