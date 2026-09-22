@@ -147,11 +147,11 @@ Algunos valores dependen del equipo y **hay que revisarlos** en
   getent group render video
   ```
   y actualizá los números si difieren.
-- **IP del servidor**: la red usa `192.168.1.14` fija en el Caddyfile
+- **IP del servidor**: la red usa `<ip-servidor>` fija en el Caddyfile
   (`jellyfin.lan`, `pihole.lan`) y en el DNS de Pi-hole
   (`pihole/etc-dnsmasq.d/02-local-dns.conf`). Si la IP del server cambia,
   actualizá esos dos archivos.
-- **Cámaras (Frigate)**: `frigate/config/config.yml` apunta a `192.168.1.50`.
+- **Cámaras (Frigate)**: `frigate/config/config.yml` apunta a `<ip-camara>`.
   Ajustá IP/usuario/URL RTSP según tus cámaras.
 - **Pi-hole en modo host** toma el 8081/8443 (le deja el 80/443 a Caddy).
 
